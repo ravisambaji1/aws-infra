@@ -38,7 +38,7 @@ This Azure DevOps pipeline automates Terraform deployment and destruction proces
 The pipeline uses AWS S3 and DynamoDB for state management:
 - **S3 Bucket**: `terraform-state-1999`
 - **State File Key**: `terraform.tfstate`
-- **Backend Region**: `aws-us-east-lab`
+- **Backend Region**: `aws-us-east-1`
 
 ## Trigger
 - **Trigger Mode**: Manual (`none`), meaning it will not run automatically and must be manually triggered in Azure DevOps.
