@@ -1,0 +1,115 @@
+trigger:
+  - none
+
+pool:
+  name: 'Default'
+
+stages:
+- stage: build_stage
+  displayName: Terraform Build Stage
+  jobs:
+  - job: build_job
+    displayName: Terraform Build Job
+    steps:
+    - task: TerraformInstaller@1
+      displayName: Install Terraform
+      inputs:
+        terraformVersion: 'latest'
+    - task: TerraformTaskV4@4
+      displayName: Terraform Init
+      inputs:
+        provider: 'aws'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        backendServiceAWS: 'aws-us-east-lab'
+        backendAWSBucketName: 'terraform-state-1945'
+        backendAWSKey: 'terraform.tfstate'
+        commandOptions: '-reconfigure'
+    - task: TerraformTaskV4@4
+      displayName: Terraform Plan
+      inputs:
+        provider: 'aws'
+        command: 'plan'
+        environmentServiceNameAWS: 'aws-us-east-lab'
+
+- stage: manual_approval
+  displayName: Manual Approval Before Deployment
+  jobs:
+  - job: wait_for_approval
+    displayName: Wait for Manual Approval
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      displayName: "Manual approval required"
+      inputs:
+        notifyUsers: 'ravisambaji@gmail.com'
+        instructions: 'Please review the Terraform plan and approve deployment.'
+        onTimeout: 'reject'
+
+- stage: deploy_stage
+  displayName: Terraform Deploy Stage
+  dependsOn: manual_approval
+  condition: succeeded()
+  jobs:
+  - job: deploy_job
+    displayName: Terraform Deployment
+    steps:
+    - task: TerraformTaskV4@4
+      displayName: Terraform Init (Before Apply)
+      inputs:
+        provider: 'aws'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        backendServiceAWS: 'aws-us-east-lab'
+        backendAWSBucketName: 'terraform-state-1945'
+        backendAWSKey: 'terraform.tfstate'
+        commandOptions: '-reconfigure'
+    - task: TerraformTaskV4@4
+      displayName: Terraform Apply
+      inputs:
+        provider: 'aws'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        environmentServiceNameAWS: 'aws-us-east-lab'
+        commandOptions: '-auto-approve'
+
+- stage: approval_stage
+  displayName: Approval Before Destroy
+  jobs:
+  - job: wait_for_approval
+    displayName: Wait for Manual Approval Before Destroy
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      displayName: "Manual approval required"
+      inputs:
+        notifyUsers: 'ravisambaji@gmail.com'
+        instructions: 'Please review the Terraform deployment and approve to proceed with destroy.'
+        onTimeout: 'reject'
+
+- stage: destroy_stage
+  displayName: Terraform Destroy Stage
+  dependsOn: approval_stage
+  condition: succeeded()
+  jobs:
+  - job: destroy_job
+    displayName: Terraform Destroy
+    steps:
+    - task: TerraformTaskV4@4
+      displayName: Terraform Init (Before Destroy)
+      inputs:
+        provider: 'aws'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        backendServiceAWS: 'aws-us-east-lab'
+        backendAWSBucketName: 'terraform-state-1945'
+        backendAWSKey: 'terraform.tfstate'
+        commandOptions: '-reconfigure'
+    - task: TerraformTaskV4@4
+      displayName: Terraform Destroy
+      inputs:
+        provider: 'aws'
+        command: 'destroy'
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        environmentServiceNameAWS: 'aws-us-east-lab'
+        commandOptions: '-auto-approve'
